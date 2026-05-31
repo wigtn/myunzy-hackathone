@@ -11,11 +11,13 @@ export function InputBar({
   disabled,
   onText,
   onVoice,
+  onRecordStart,
 }: {
   mode: "voice" | "text";
   disabled: boolean;
   onText: (text: string) => void;
   onVoice: (audio: Blob) => void;
+  onRecordStart?: () => void; // 녹음 시작 직전 호출 — 재생 중인 면접관 TTS 중단(에코 방지).
 }) {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
@@ -42,6 +44,9 @@ export function InputBar({
       recRef.current?.stop();
       return;
     }
+    // ⭐ 녹음 시작 즉시(마이크 권한/getUserMedia 대기 전) 재생 중인 면접관 TTS를 끊는다.
+    // 비동기 대기 중에도 TTS가 흐르면 마이크가 그 소리를 녹음해 에코가 생기므로 동기로 먼저 중단.
+    onRecordStart?.();
     // getUserMedia는 보안 컨텍스트(HTTPS/localhost)에서만 동작 → 미지원 시 즉시 텍스트 폴백.
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setForceText(true);

@@ -1,17 +1,18 @@
 // GET /api/v1/tts?text=...&voice=... — 면접관 응답 텍스트를 Qwen3-TTS 음성(WAV)으로 합성.
 // 브라우저가 <audio src> / new Audio(url)로 직접 소비할 수 있도록 audio/wav를 스트리밍한다.
 // HTTP TTS 서버를 BFF가 대리 호출 → HTTPS 프론트의 mixed-content 회피 (sttClient와 동일 전략).
-import { fail, forward, isProxy } from "@/lib/bff/agentClient";
+import { fail, forwardStream, isProxy } from "@/lib/bff/agentClient";
 import { synthesize } from "@/lib/bff/ttsClient";
 
 // 합성 텍스트 상한 — 무제한 입력이 업스트림 TTS를 남용/증폭하는 것을 차단.
 const MAX_TTS_TEXT = 2000;
 
 export async function GET(req: Request): Promise<Response> {
-  // 프록시 모드면 Python 에이전트 서비스가 TTS도 담당 → 원본 그대로 전달.
+  // 프록시 모드면 Python 에이전트 서비스가 TTS도 담당 → 스트리밍으로 그대로 전달.
+  // (forward는 전체 버퍼링 → 첫 음성까지 지연. forwardStream은 청크 즉시 파이프.)
   if (isProxy) {
     const qs = new URL(req.url).search;
-    return forward(req, `/api/v1/tts${qs}`);
+    return forwardStream(req, `/api/v1/tts${qs}`);
   }
 
   const url = new URL(req.url);

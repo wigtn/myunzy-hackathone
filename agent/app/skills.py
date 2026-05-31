@@ -47,17 +47,61 @@ LENGTH_PRESETS = {"short": 2, "standard": 3, "deep": 5}
 # 라운드당 최대 꼬리질문 수 — 약점 신호가 잡힐 때만 발사 (FR-009).
 MAX_FOLLOWUP = 2
 
-# FR-005 플레이북 스왑 — 직무 키워드 → 플레이북 id. "엔진 불변, 데이터만 추가" 원칙.
+# FR-005 플레이북 스왑 = "스킬(SKILL.md) 한 장". "엔진 불변, 데이터만 추가" 원칙.
+# 각 항목 = 한 스킬:
+#   - description: frontmatter(progressive disclosure 1단계 — 모델이 '설명만' 보고 고르는 줄)
+#   - probes     : body(2단계 — 선택된 뒤에만 컨텍스트로 로드되는 도메인 공략 앵글)
+#   - keywords   : 모델 부재(mock)·실패 시 결정론 폴백(detect_playbook)용
 PLAYBOOKS: dict[str, dict] = {
-    "backend": {"label": "백엔드/서버", "keywords": ["백엔드", "서버", "backend", "server", "인프라", "devops", "데이터", "플랫폼"]},
-    "frontend": {"label": "프론트엔드", "keywords": ["프론트", "frontend", "웹", "web", "react", "ui", "client"]},
-    "pm": {"label": "기획/PM", "keywords": ["기획", "pm", "product", "프로덕트", "매니저", "기획자"]},
-    "general": {"label": "일반", "keywords": []},
+    "backend": {
+        "label": "백엔드/서버",
+        "keywords": ["백엔드", "서버", "backend", "server", "인프라", "devops", "데이터", "플랫폼"],
+        "description": "백엔드·서버·인프라·데이터 직무. 대규모 트래픽/데이터 처리, 분산 시스템, 성능(p99·QPS) 트레이드오프를 정량으로 캐묻는다.",
+        "probes": [
+            "처리량(QPS)·지연(p99)·데이터 규모를 구체 수치로 검증",
+            "장애·병목 상황의 의사결정과 트레이드오프(일관성 vs 가용성 등)",
+            "직접 설계한 부분과 운영만 한 부분의 분리",
+        ],
+    },
+    "frontend": {
+        "label": "프론트엔드",
+        "keywords": ["프론트", "frontend", "웹", "web", "react", "ui", "client"],
+        "description": "프론트엔드·웹·클라이언트 직무. 렌더링 성능, 상태관리 설계, 접근성/UX, 컴포넌트 경계 결정을 파고든다.",
+        "probes": [
+            "렌더링/번들 성능을 어떤 지표(LCP·TBT·번들KB)로 개선했는가",
+            "상태관리·데이터 흐름 설계의 트레이드오프와 그 근거",
+            "접근성·크로스브라우저·UX 품질을 어떻게 보장했는가",
+        ],
+    },
+    "pm": {
+        "label": "기획/PM",
+        "keywords": ["기획", "pm", "product", "프로덕트", "매니저", "기획자"],
+        "description": "기획·PM·프로덕트 직무. 문제 정의, 지표 설계(북극성·전환율), 우선순위 결정과 그 임팩트를 검증한다.",
+        "probes": [
+            "성공 지표를 무엇으로 정의했고 실제로 얼마나 움직였는가",
+            "리소스 제약 속 우선순위 결정 근거와 포기한 것",
+            "가설→실험→의사결정의 데이터 기반 사이클",
+        ],
+    },
+    "general": {
+        "label": "일반",
+        "keywords": [],
+        "description": "특정 직군에 매핑되지 않는 일반 직무. 핵심 성과의 정량 입증과 본인 기여의 구체성을 검증한다.",
+        "probes": [
+            "핵심 성과를 정량 지표(숫자)로 입증할 수 있는가",
+            "강점 주장에 상황·행동·결과(STAR)가 뒷받침되는가",
+            "지원 직무 핵심 역량의 직접 경험 근거가 충분한가",
+        ],
+    },
 }
 
 
 def detect_playbook(company: str, role: str) -> str:
-    """직무 문자열 → 플레이북 id (FR-005). 매칭 없으면 general."""
+    """직무 문자열 → 플레이북 id (FR-005). 매칭 없으면 general.
+
+    ⚠️ 이것은 '결정론 폴백' 경로다(모델 부재·실패 시). 1차 선택은 select_skill(모델 주도,
+    아래 skill_catalog 설명을 읽고 고름) — engine._select_skill 참고.
+    """
     hay = f"{company} {role}".lower()
     for pid, p in PLAYBOOKS.items():
         if pid == "general":
@@ -65,6 +109,23 @@ def detect_playbook(company: str, role: str) -> str:
         if any(k.lower() in hay for k in p["keywords"]):
             return pid
     return "general"
+
+
+def skill_catalog() -> list[dict]:
+    """progressive disclosure 1단계: 모델에 보여줄 '설명만'(본문 probes 제외).
+
+    SkillsMiddleware가 SKILL.md frontmatter만 노출하는 것과 동형 — 모델은 이 설명을 읽고
+    직무에 가장 맞는 스킬 id 하나를 고른다.
+    """
+    return [{"id": pid, "label": p["label"], "description": p["description"]} for pid, p in PLAYBOOKS.items()]
+
+
+def skill_body(pid: str) -> list[str]:
+    """progressive disclosure 2단계: 선택된 스킬의 본문(probes)만 로드.
+
+    선택되기 전엔 컨텍스트에 들어가지 않는다 → 토큰 절약 + 선택의 행동적 효과를 분리.
+    """
+    return list(PLAYBOOKS.get(pid, PLAYBOOKS["general"]).get("probes", []))
 
 # mock 캔드 데이터 (BFF TS mock과 동일 사양) — 실 어댑터 도착 시 ports.mock 교체
 ATTACK_POINTS = [

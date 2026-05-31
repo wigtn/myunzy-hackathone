@@ -23,6 +23,11 @@ class MockLlmAdapter(LlmPort):
         turn_idx = int(ctx.get("turn_idx", 0))
         want_tool = ctx.get("want_tool")
 
+        # 스킬 선택(progressive disclosure 1단계): mock은 추론 모델이 아니므로 선택을 비운다
+        # → 엔진이 결정론 폴백(detect_playbook 키워드 매칭)으로 복구. 모델 주도 선택은 EXAONE 경로.
+        if ctx.get("select_skill"):
+            return LlmResult(text="")
+
         if want_tool:
             # 가끔(결정론) 인자 누락된 깨진 호출 → 하네스가 잡아서 재시도.
             # 리프롬프트(_retry_fix) 시엔 항상 유효한 인자로 복구.

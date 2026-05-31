@@ -8,6 +8,7 @@ LangGraph 결정론 컨트롤러 analog (AGENT_ARCHITECTURE.md §3):
 from __future__ import annotations
 
 import os
+import re
 
 from . import ports
 from .harness import TOOL_SUMMARY, call_with_retry, curate_tools
@@ -22,6 +23,8 @@ from .skills import (
     PERSONAS,
     PLAYBOOKS,
     detect_playbook,
+    skill_body,
+    skill_catalog,
 )
 from .state import analyze_answer, update_weakness_profile
 from .store import Session, StoredTurn, emit, new_id, put
@@ -45,6 +48,36 @@ def _resolve_sequence(stages: list[str] | None, length: str) -> list[str]:
     if not seq:
         seq = list(_DEFAULT_SEQUENCE.get(length, _DEFAULT_SEQUENCE["standard"]))
     return seq
+
+
+# ── 스킬 선택 (FR-005, progressive disclosure) ──
+# 1단계: 모델에 카탈로그 '설명만' 보여주고 직무에 맞는 스킬 id 택1 (모델 주도).
+# 폴백: 모델 부재(mock)·무효·장애 → detect_playbook 키워드 매칭(결정론).
+# 2단계(skill_body 로드)는 bootstrap이 선택 결과로 수행.
+def _select_skill(s: Session, company: str, role: str) -> tuple[str, str]:
+    catalog = skill_catalog()
+    valid = {c["id"] for c in catalog}
+    try:
+        res = get_llm().chat([{
+            "select_skill": True,
+            "catalog": catalog,
+            "company": company,
+            "role": role,
+            "resume_summary": s.resume.get("summary", ""),
+        }])
+        cand = (res.text or "").strip().lower()
+        # 모델이 id 또는 짧은 문장("id: backend.", "backend/server")을 줄 수 있음 →
+        # 구두점 제거 후 토큰 매칭(구두점 내성). 유효 id가 토큰으로 등장하면 채택.
+        cand_tokens = set(re.findall(r"[a-z]+", cand))
+        for pid in (c["id"] for c in catalog):
+            if cand == pid or pid in cand_tokens:
+                return pid, "모델 주도"
+    except Exception as e:
+        # 침묵 대신 사유 기록 (주변 OCR/JOB/RANK 호출 컨벤션과 일치) → 라우팅 실패 진단 가능.
+        emit(s, "skill.select", "retry", f"모델 스킬 선택 실패 → 키워드 폴백: {e}")
+    # 결정론 폴백 — 키워드 매칭
+    pid = detect_playbook(company, role)
+    return (pid if pid in valid else "general"), "키워드 폴백"
 
 
 # 공고·이력서 어디서도 갭을 못 뽑았을 때의 '역할 중립' 폴백. 특정 직무(백엔드) 색이 없어야
@@ -80,6 +113,7 @@ def bootstrap(
     job_urls: list[str] | None = None,
     stages: list[str] | None = None,
 ) -> Session:
+    # 스킬은 resume 확보 후 모델 주도로 선택(아래) — 여기선 키워드 시드로 Session 초기화만.
     playbook = detect_playbook(company, role)
     # 면접 단계 = 사용자가 고른 페르소나 시퀀스. 각 단계가 한 라운드(한 면접관). 없으면 length 프리셋.
     sequence = _resolve_sequence(stages, length)
@@ -120,6 +154,13 @@ def bootstrap(
     }
     ocr_detail = f"{docs} 파싱" + (f" · 추출 스킬 {', '.join(ocr_skills[:4])}" if ocr_skills else " · 경력·스킬 추출")
     emit(s, "ocr.parse", "done", ocr_detail, mock=getattr(ports.OCR, "is_mock", False))
+
+    # ── 스킬 선택 (progressive disclosure) — resume 확보 후 모델 주도 1차, 키워드 폴백 ──
+    # 1단계: 카탈로그 '설명만' 모델에 노출 → id 택1. 2단계: 선택된 스킬 본문(probes) 로드.
+    catalog = skill_catalog()
+    playbook, skill_how = _select_skill(s, company, role)
+    s.playbook = playbook
+    s.skill_probes = skill_body(playbook)
 
     # 채용공고 분석 → s.job_postings(UI 증명용 실공고) + attack_points.
     # 우선순위: 사용자 지정 URL > 자동 검색 > 직접 붙여넣은 텍스트 > 이력서 파생.
@@ -179,7 +220,13 @@ def bootstrap(
     _name_by_id = {p["id"]: p["name"] for p in PERSONAS}
     stage_names = " → ".join(_name_by_id.get(p, p) for p in sequence)
     emit(s, "fitgap.analyze", "done", f"공격 포인트 {len(attack_points)}개 ({fit_source} 기반)", mock=(fit_source == "일반"))
-    emit(s, "playbook.select", "done", f"플레이북={PLAYBOOKS[playbook]['label']} · 면접 단계 {len(sequence)}개")
+    emit(
+        s,
+        "skill.select",
+        "done",
+        f"스킬 선택({skill_how}): {PLAYBOOKS[playbook]['label']} · "
+        f"후보 {len(catalog)}개 설명 중 택1(progressive disclosure) → 본문 공략앵글 {len(s.skill_probes)}개 로드",
+    )
     emit(s, "persona.build", "done", f"면접 단계 구성: {stage_names}")
 
     # 첫 질문을 이력서 기반으로 동적 생성 (LLM=EXAONE, 장애 시 mock→페르소나 openingLine 폴백).
@@ -242,6 +289,7 @@ def _generate_opening(s: Session) -> str:
         "resume_skills": s.resume.get("skills", []),
         "resume_projects": s.resume.get("projects", []),
         "attack_points": s.fit_gap.get("attackPoints", []),
+        "skill_probes": s.skill_probes,  # progressive disclosure 2단계 — 선택 스킬 공략앵글
     }
     try:
         res = get_llm().chat([ctx], curate_tools(persona["tools"]))
@@ -356,6 +404,7 @@ def process_turn(
             "resume_summary": s.resume.get("summary", ""),
             "resume_skills": s.resume.get("skills", []),
             "resume_projects": s.resume.get("projects", []),
+            "skill_probes": s.skill_probes,  # progressive disclosure 2단계 — 선택 스킬 공략앵글
         }],
         tools,
         on_log,

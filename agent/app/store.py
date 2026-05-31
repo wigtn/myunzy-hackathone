@@ -27,7 +27,8 @@ class Session:
     fit_gap: dict
     personas: list[dict]
     active_persona: str
-    playbook: str = "general"          # 직무 감지 결과 (FR-005 플레이북 스왑)
+    playbook: str = "general"          # 선택된 스킬 id (FR-005 — 모델 주도 select_skill, 폴백 detect_playbook)
+    skill_probes: list[str] = field(default_factory=list)  # 선택된 스킬 본문(progressive disclosure 2단계) — 질문 앵글로 주입
     persona_sequence: list[str] = field(default_factory=lambda: ["tech"])  # 라운드별 면접 단계(페르소나)
     interview_length: int = 3          # = len(persona_sequence). 면접 단계 수 = 라운드 수
     round: int = 1                     # 현재 면접 단계 번호 (1-based)

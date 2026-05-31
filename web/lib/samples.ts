@@ -4,7 +4,7 @@
 
 import type { PersonaId } from "@/lib/contract/types";
 
-export type SampleId = "dev" | "sales" | "pm";
+export type SampleId = "sales" | "pm";
 
 export interface Sample {
   id: SampleId;
@@ -21,55 +21,6 @@ export interface Sample {
 }
 
 export const SAMPLES: Sample[] = [
-  {
-    id: "dev",
-    label: "백엔드 개발자",
-    role: "백엔드 개발자",
-    company: "토스",
-    stages: ["tech", "culture", "exec"], // 개발자 = 기술 면접관 중심(tech) + 컬처핏·임원
-    tagline: "4년차 · ‘p99 82% 개선’이라는데 어떤 구조로?",
-    why: "기술 면접관이 설계 트레이드오프와 정량 근거(p99·QPS·규모)를 끝까지 캐묻습니다.",
-    jobPosting:
-      "[지원 직무] 백엔드 개발자 (Server / Backend Engineer)\n" +
-      "[자격요건]\n" +
-      "- 대규모 트래픽 처리 경험 (초당 수천 RPS, 대용량 데이터)\n" +
-      "- 분산 시스템 설계·운영 및 성능 최적화 (p99 레이턴시·QPS)\n" +
-      "- RDB/캐시/메시지큐 기반 아키텍처 설계 경험\n" +
-      "[우대사항]\n" +
-      "- 장애 대응·SRE, 이벤트 기반 아키텍처(Kafka 등)\n" +
-      "- Kubernetes 기반 운영, 인덱스/쿼리 튜닝 경험\n" +
-      "[주요업무]\n" +
-      "- 핵심 서버 API 설계·개발, 성능/안정성 개선, 트래픽 대응",
-    resumePdf: "/samples/resume-dev.pdf",
-    resumePdfLines: [
-      "Resume - Backend Engineer (Sample)",
-      "Name: Lee (Sample Candidate)",
-      "Applying: Toss / Backend Engineer",
-      "",
-      "Experience (4 yrs, Backend / Server)",
-      "- Order settlement system handling ~2M tx/day",
-      "- Redesigned indexes, p99 latency 1.8s -> 320ms ('big improvement')",
-      "- Migrated monolith module to event-driven services",
-      "- On-call, incident response, capacity planning",
-      "",
-      "Skills: Java, Spring, Kotlin, MySQL, Redis, Kafka, AWS, Docker, Kubernetes",
-      "Education: BS, Computer Science",
-      "",
-      "(Note: scale/latency numbers are partly vague - interviewers will probe.)",
-    ],
-    cover:
-      "자기소개서 — 이백엔드 (백엔드 개발자)\n" +
-      "════════════════════════════════════\n" +
-      "[지원 동기]\n" +
-      "대규모 트래픽을 안정적으로 버티는 시스템을 설계하는 일에 매력을 느낍니다.\n" +
-      "주문 정산 시스템에서 인덱스 재설계로 응답 지연을 크게 줄인 경험이 있고,\n" +
-      "토스에서 더 큰 규모의 트래픽을 다뤄보고 싶어 지원했습니다.\n\n" +
-      "[강점]\n" +
-      "병목을 데이터로 찾아 트레이드오프를 따져 결정합니다. 일관성과 가용성\n" +
-      "사이에서 상황에 맞는 선택을 해 본 경험이 있습니다.\n\n" +
-      "[성장 방향]\n" +
-      "분산 시스템의 장애 대응 자동화와 관측성(Observability)을 더 깊이 다루고 싶습니다.\n",
-  },
   {
     id: "sales",
     label: "영업사원",

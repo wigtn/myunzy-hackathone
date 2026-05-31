@@ -11,7 +11,7 @@ import { InputBar } from "@/components/spar/InputBar";
 import { PassGauge } from "@/components/spar/PassGauge";
 import { PersonaTabs } from "@/components/spar/PersonaTabs";
 import { StateHud } from "@/components/spar/StateHud";
-import { getSession, pollQueue, postTurnText, postTurnVoice, postVerdict, releaseSlot } from "@/lib/client/api";
+import { getSession, pollQueue, postTurnStream, postTurnText, postTurnVoice, postVerdict, releaseSlot } from "@/lib/client/api";
 import type { AgentLog, Session, StateDelta, Turn, Verdict } from "@/lib/contract/types";
 
 // 브라우저 내장 TTS 폴백 (Qwen3-TTS 미설정/실패 시).
@@ -183,6 +183,94 @@ export default function SparPage() {
     [session?.mode, roundOver],
   );
 
+  // 스트리밍 턴(TTFT): 질문 토큰을 즉시 화면에 흘리고, 끝에 전체 결과로 보강.
+  // 스트리밍 불가/실패 시 비스트리밍 handleTurn 으로 폴백 → 데모 무중단.
+  const handleTurnStream = useCallback(
+    async (payload: { text?: string; audio?: Blob }) => {
+      if (roundOver) return;
+      setThinking(true);
+      setEvolve(null);
+      let started = false;
+      let firstToken = true;
+      const fillLastAi = (mut: (t: Turn) => Turn) =>
+        setTurns((prev) => {
+          if (!prev.length) return prev;
+          const next = prev.slice();
+          const last = next[next.length - 1];
+          if (last.speaker === "ai") next[next.length - 1] = mut(last);
+          return next;
+        });
+      try {
+        await postTurnStream(sessionId, payload, {
+          onStart: (userText, personaId) => {
+            started = true;
+            // SSE는 personaId를 string으로 전달 → Turn/Session의 PersonaId 유니온으로 좁힌다.
+            const pid = personaId as Turn["personaId"];
+            setTurns((prev) => [
+              ...prev,
+              { speaker: "user", text: userText },
+              { speaker: "ai", personaId: pid, text: "" },
+            ]);
+            if (pid) setSession((s) => (s ? { ...s, activePersona: pid } : s));
+          },
+          onToken: (delta) => {
+            if (firstToken) {
+              firstToken = false;
+              setThinking(false); // 첫 토큰 도착 → 타이핑 점 숨기고 질문이 흐르기 시작
+            }
+            fillLastAi((t) => ({ ...t, text: t.text + delta }));
+          },
+          onReset: () => fillLastAi((t) => ({ ...t, text: "" })),
+          onDone: (r) => {
+            fillLastAi(() => ({
+              speaker: "ai",
+              personaId: r.counterpartTurn.personaId,
+              text: r.counterpartTurn.text,
+              audioUrl: r.counterpartTurn.audioUrl ?? undefined,
+              toolCalls: r.counterpartTurn.toolCalls,
+            }));
+            setLogs((prev) => [...prev, ...r.agentLog]);
+            setPass(r.passProbability);
+            setState(r.counterpartTurn.stateDelta);
+            if (r.counterpartTurn.personaId)
+              setSession((s) => (s ? { ...s, activePersona: r.counterpartTurn.personaId } : s));
+            if (session?.mode === "voice")
+              playVoice(r.counterpartTurn.text, r.counterpartTurn.audioUrl, voiceRef.current);
+          },
+        });
+      } catch (e) {
+        const err = e as Error & { code?: string };
+        if (err.code === "STT_FAILED") {
+          setToast("잘 못 들었어요. 다시 말씀하거나 텍스트로 입력하세요.");
+          setTimeout(() => setToast(undefined), 4000);
+          return;
+        }
+        // 서버가 이미 턴 처리를 시작한 뒤 끊김(STREAM_ERROR) → 재실행하면 턴이 중복 누적되므로
+        // 폴백하지 않고 안내만 한다(원시 예외 메시지는 노출하지 않음).
+        if (err.code === "STREAM_ERROR") {
+          setToast("응답 처리에 실패했어요. 다시 시도해 주세요.");
+          setTimeout(() => setToast(undefined), 4000);
+          return;
+        }
+        // 스트리밍 불가(비프록시 등)·시작 전 실패 → 비스트리밍 경로로 폴백.
+        if (!started) {
+          await handleTurn(() =>
+            payload.audio
+              ? postTurnVoice(sessionId, payload.audio)
+              : postTurnText(sessionId, payload.text ?? ""),
+          );
+          return;
+        }
+        // 이미 일부 렌더된 뒤 끊김(희귀) → 안내만.
+        setToast(err.message || "응답 처리에 실패했어요. 다시 시도해 주세요.");
+        setTimeout(() => setToast(undefined), 4000);
+      } finally {
+        setThinking(false);
+      }
+    },
+    [session?.mode, roundOver, sessionId, handleTurn],
+  );
+
   async function endRound() {
     if (thinking || roundOver) return; // 중복 판정 방지
     setThinking(true);
@@ -321,8 +409,13 @@ export default function SparPage() {
           <InputBar
             mode={session.mode}
             disabled={thinking}
-            onText={(text) => handleTurn(() => postTurnText(sessionId, text))}
-            onVoice={(audio) => handleTurn(() => postTurnVoice(sessionId, audio))}
+            onText={(text) => handleTurnStream({ text })}
+            onVoice={(audio) => handleTurnStream({ audio })}
+            onRecordStart={() => {
+              // 답변 녹음 시작 → 재생 중인 면접관 음성(WAV/브라우저 TTS) 즉시 중단(에코 방지).
+              stopVoice();
+              if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+            }}
           />
         )}
       </div>

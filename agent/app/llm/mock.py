@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-from typing import Optional
+import re
+from typing import Iterator, Optional
 
 from ..skills import EVOLVE_QUESTIONS, QUESTION_BANK
 from .base import LlmPort, LlmResult
@@ -58,3 +59,13 @@ class MockLlmAdapter(LlmPort):
         round_bank = bank[min(rnd - 1, len(bank) - 1)]
         text = round_bank[turn_idx % len(round_bank)]
         return LlmResult(text=text)
+
+    def stream(self, ctx: dict) -> Iterator[str]:
+        """질문 텍스트를 어절 단위 청크로 흘린다(스트리밍 형태 유지).
+
+        mock은 지연 0이라 청크가 거의 동시에 도착하지만, 실 LLM과 동일한 SSE 경로를
+        타게 해 클라이언트 코드가 분기 없이 동작하도록 한다. 텍스트는 chat()과 동일 규칙.
+        """
+        text = self.chat([ctx]).text or ""
+        for tok in re.findall(r"\S+\s*", text):
+            yield tok

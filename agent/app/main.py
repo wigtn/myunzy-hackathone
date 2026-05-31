@@ -199,6 +199,50 @@ async def post_turn(session_id: str, request: Request):
     return ok(engine.process_turn(s, text, is_voice=False))
 
 
+@app.post("/api/v1/sessions/{session_id}/turns/stream")
+async def post_turn_stream(session_id: str, request: Request):
+    """턴 처리 — 면접관 질문을 SSE 토큰 스트리밍(TTFT). /turns 와 동일 입력(텍스트/음성).
+
+    이벤트: data:{type:start|token|reset|done|error}. STT 실패 등 시작 전 오류는 JSON으로 반환
+    (클라가 비스트리밍 /turns 로 폴백). 본문 스트림은 web BFF가 forwardStream으로 무버퍼 파이프.
+    """
+    s = store.get(session_id)
+    if not s:
+        return fail("NOT_FOUND", "세션을 찾을 수 없습니다.", 404)
+
+    ct = request.headers.get("content-type", "")
+    is_voice = False
+    word_timestamps = None
+    if "multipart/form-data" in ct:
+        form = await request.form()
+        audio = form.get("audio")
+        if audio is None:
+            return fail("STT_FAILED", "음성을 인식하지 못했어요. 다시 말씀하거나 텍스트로 입력하세요.", 422)
+        from . import ports
+
+        audio_bytes = await audio.read()  # type: ignore[union-attr]
+        try:
+            stt = ports.STT.transcribe(audio_bytes)
+        except Exception:
+            return fail("STT_FAILED", "음성을 인식하지 못했어요. 다시 말씀하거나 텍스트로 입력하세요.", 422)
+        if not stt.get("text"):
+            return fail("STT_FAILED", "음성을 인식하지 못했어요. 다시 말씀하거나 텍스트로 입력하세요.", 422)
+        text = stt["text"]
+        is_voice = True
+        word_timestamps = stt.get("wordTimestamps")
+    else:
+        body = await request.json()
+        text = (body.get("text") or "").strip()
+        if not text:
+            return fail("INVALID_INPUT", "답변 텍스트가 필요합니다.", 400)
+
+    return StreamingResponse(
+        engine.stream_turn(s, text, is_voice=is_voice, word_timestamps=word_timestamps),
+        media_type="text/event-stream",
+        headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
+    )
+
+
 @app.post("/api/v1/sessions/{session_id}/verdict")
 def post_verdict(session_id: str):
     s = store.get(session_id)

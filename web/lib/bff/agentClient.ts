@@ -30,6 +30,33 @@ export async function forward(req: Request, path: string): Promise<Response> {
   }
 }
 
+/**
+ * 스트리밍 전용 프록시 — upstream 본문을 버퍼링 없이 그대로 흘려보낸다.
+ * TTS(audio/wav)처럼 첫 청크가 빨리 도착해야 하는 응답에 사용. forward()는
+ * arrayBuffer()로 전체를 모은 뒤 반환하므로 스트리밍이 깨진다(첫 음성까지 지연).
+ * 비-200(예: 503 JSON)도 status/본문 그대로 전달 → 클라가 audio.onerror로 폴백 감지.
+ */
+export async function forwardStream(req: Request, path: string): Promise<Response> {
+  const url = `${AGENT_URL}${path}`;
+  const method = req.method;
+  const headers = new Headers(req.headers);
+  headers.delete("host");
+  headers.delete("content-length");
+  const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
+  try {
+    const upstream = await fetch(url, { method, headers, body });
+    const out = new Headers();
+    const ct = upstream.headers.get("content-type");
+    if (ct) out.set("content-type", ct);
+    const cc = upstream.headers.get("cache-control");
+    if (cc) out.set("cache-control", cc);
+    // upstream.body(ReadableStream)를 그대로 파이프 → 도착하는 청크 즉시 브라우저로.
+    return new Response(upstream.body, { status: upstream.status, headers: out });
+  } catch {
+    return fail("UPSTREAM_UNAVAILABLE", "에이전트 서비스에 연결할 수 없습니다. mock 폴백 또는 재시도하세요.");
+  }
+}
+
 export function ok<T>(data: T, status = 200): NextResponse {
   return NextResponse.json({ success: true, data }, { status });
 }

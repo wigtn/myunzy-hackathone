@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
+from typing import Iterator, Optional
 
 from ..skills import FRAMEWORK, PERSONAS
 from .base import LlmPort, LlmResult
@@ -101,6 +101,44 @@ class ExaoneLlmAdapter(LlmPort):
         except Exception:
             return LlmResult(text="")
         return LlmResult(text=(out or "").strip().lower())
+
+    # ── 질문 토큰 스트리밍 (TTFT) ──
+    def stream(self, ctx: dict) -> Iterator[str]:
+        """질문 생성 ctx를 EXAONE에 stream:true로 보내고 토큰 델타를 yield.
+
+        select_skill/want_tool/raw 패스스루는 스트리밍 대상이 아니다(질문 생성 전용).
+        네트워크/파싱 장애 시 예외 → 호출부(engine.stream_turn)가 블로킹 폴백으로 복구.
+        """
+        import httpx
+
+        messages = self._build_question_messages(ctx)
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": 320,
+            "stream": True,  # ⭐ TTFT — 첫 토큰부터 흘려보냄
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        headers = {"content-type": "application/json"}
+        if self.api_key:
+            headers["authorization"] = f"Bearer {self.api_key}"
+        with httpx.Client(timeout=self.timeout) as client:
+            with client.stream("POST", f"{self.base}/chat/completions", json=body, headers=headers) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                        delta = obj["choices"][0]["delta"].get("content")
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                        continue
+                    if delta:
+                        yield delta
 
     # ── 질문 생성 프롬프트 (페르소나 + 약점 + 공고 컨텍스트) ──
     def _build_question_messages(self, ctx: dict) -> list[dict]:

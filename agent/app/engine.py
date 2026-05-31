@@ -7,6 +7,7 @@ LangGraph 결정론 컨트롤러 analog (AGENT_ARCHITECTURE.md §3):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 
@@ -322,12 +323,16 @@ def session_dto(s: Session) -> dict:
 
 
 # ── 턴 처리 (FR-008~010, 015, 017) ──
-def process_turn(
+def _turn_prelude(
     s: Session,
     user_text: str,
-    is_voice: bool,
-    word_timestamps: list[dict] | None = None,
+    word_timestamps: list[dict] | None,
 ) -> dict:
+    """질문 생성 직전까지의 결정론 처리(사용자 턴 저장·약점 분석·툴콜·약점 주입).
+
+    동기(process_turn)와 스트리밍(stream_turn)이 공유 → 두 경로의 동작·로그가 동일.
+    반환: 질문 생성 ctx(q_ctx) + finalize에 필요한 부기 정보.
+    """
     llm = get_llm()
     turn_idx = sum(1 for t in s.turns if t.speaker == "user")
     logs_before = len(s.agent_logs)
@@ -386,30 +391,44 @@ def process_turn(
             f"R{s.round} 자가진화 적용: 직전 약점({carried_kind}) 공략 질문 생성 · 전략={s.weakness_profile.get('nextFocus')}",
         )
 
-    # 면접관 다음 질문 (LLM — mock이면 캔드). 컨텍스트에 약점/전략 주입 → 실 EXAONE도 이걸 받아 적응.
-    q_res = call_with_retry(
-        llm,
-        [{
-            "persona": persona_id,
-            "round": s.round,
-            "turn_idx": turn_idx,
-            "weakness_kind": carried_kind,  # 자가진화 입력 (PRD FR-011)
-            "next_focus": s.weakness_profile.get("nextFocus"),
-            # 실 LLM(GPT/EXAONE)이 동적 질문 생성에 쓰는 재료 (mock은 무시)
-            "company": s.company,
-            "role": s.role,
-            "user_answer": user_text,
-            "attack_points": s.fit_gap.get("attackPoints", []),
-            # 이력서 주입(개인화): 꼬리질문도 '이 지원자' 이력서 근거로 파고들도록.
-            "resume_summary": s.resume.get("summary", ""),
-            "resume_skills": s.resume.get("skills", []),
-            "resume_projects": s.resume.get("projects", []),
-            "skill_probes": s.skill_probes,  # progressive disclosure 2단계 — 선택 스킬 공략앵글
-        }],
-        tools,
-        on_log,
-    )
-    question = q_res.text or "조금 더 구체적으로 말씀해 주세요."
+    # 질문 생성 컨텍스트 — 실 LLM(GPT/EXAONE)이 동적 질문에 쓰는 재료 (mock은 일부 무시).
+    q_ctx = {
+        "persona": persona_id,
+        "round": s.round,
+        "turn_idx": turn_idx,
+        "weakness_kind": carried_kind,  # 자가진화 입력 (PRD FR-011)
+        "next_focus": s.weakness_profile.get("nextFocus"),
+        "company": s.company,
+        "role": s.role,
+        "user_answer": user_text,
+        "attack_points": s.fit_gap.get("attackPoints", []),
+        # 이력서 주입(개인화): 꼬리질문도 '이 지원자' 이력서 근거로 파고들도록.
+        "resume_summary": s.resume.get("summary", ""),
+        "resume_skills": s.resume.get("skills", []),
+        "resume_projects": s.resume.get("projects", []),
+        "skill_probes": s.skill_probes,  # progressive disclosure 2단계 — 선택 스킬 공략앵글
+    }
+    return {
+        "llm": llm,
+        "on_log": on_log,
+        "turn_idx": turn_idx,
+        "logs_before": logs_before,
+        "persona_id": persona_id,
+        "tool_name": tool_name,
+        "tools": tools,
+        "q_ctx": q_ctx,
+        "carried_kind": carried_kind,
+        "is_followup": is_followup,
+        "user_text": user_text,
+    }
+
+
+def _turn_finalize(s: Session, pc: dict, question: str, is_voice: bool) -> dict:
+    """질문 확정 후 마무리(ai 턴 저장·상태/합격확률·로그·TTS)와 TurnResult 생성."""
+    turn_idx = pc["turn_idx"]
+    persona_id = pc["persona_id"]
+    tool_name = pc["tool_name"]
+    carried_kind = pc["carried_kind"]
     s.turns.append(StoredTurn(round=s.round, speaker="ai", text=question, persona_id=persona_id))
 
     # stateDelta: 난이도/라운드에 따라 pressure 상승 (에스컬레이션 FR-017)
@@ -421,12 +440,12 @@ def process_turn(
     }
 
     s.pass_probability = _pass_probability(s)
-    new_logs = s.agent_logs[logs_before:]
+    new_logs = s.agent_logs[pc["logs_before"]:]
     put(s)
 
     audio_url = ports.TTS.synthesize(question)["audioUrl"] if is_voice else None
     return {
-        "userTurn": {"text": user_text, "audioRef": f"audio_{turn_idx}" if is_voice else None},
+        "userTurn": {"text": pc["user_text"], "audioRef": f"audio_{turn_idx}" if is_voice else None},
         "counterpartTurn": {
             "personaId": persona_id,
             "text": question,
@@ -439,7 +458,7 @@ def process_turn(
         "passProbability": s.pass_probability,
         "agentLog": new_logs,
         "round": s.round,
-        "isFollowup": is_followup,
+        "isFollowup": pc["is_followup"],
         "followupsInRound": s.followups_in_round,
         "interviewLength": s.interview_length,
         "interviewComplete": s.round >= s.interview_length,
@@ -456,6 +475,71 @@ def process_turn(
             else None
         ),
     }
+
+
+def process_turn(
+    s: Session,
+    user_text: str,
+    is_voice: bool,
+    word_timestamps: list[dict] | None = None,
+) -> dict:
+    """동기 턴 처리 — 질문을 한 번에 생성해 완성된 TurnResult 반환(기존 엔드포인트)."""
+    pc = _turn_prelude(s, user_text, word_timestamps)
+    # 면접관 다음 질문 (LLM — mock이면 캔드). 컨텍스트에 약점/전략 주입 → 실 EXAONE도 이걸 받아 적응.
+    q_res = call_with_retry(pc["llm"], [pc["q_ctx"]], pc["tools"], pc["on_log"])
+    question = q_res.text or "조금 더 구체적으로 말씀해 주세요."
+    return _turn_finalize(s, pc, question, is_voice)
+
+
+def _sse(obj: dict) -> str:
+    return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+def stream_turn(
+    s: Session,
+    user_text: str,
+    is_voice: bool,
+    word_timestamps: list[dict] | None = None,
+):
+    """SSE 제너레이터(TTFT): 질문 토큰을 즉시 흘리고, 끝에 전체 TurnResult를 보낸다.
+
+    이벤트(JSON): start(userText·personaId) → token(t) 반복 → done(result).
+    실 LLM(EXAONE/OpenAI)은 토큰 단위, mock은 청크 단위. 스트림 장애 시 블로킹 폴백(데모 무중단).
+    """
+    try:
+        pc = _turn_prelude(s, user_text, word_timestamps)
+    except Exception as e:  # 프리루드(STT 이후) 실패 → 클라가 폴백하도록 에러 이벤트
+        yield _sse({"type": "error", "message": str(e)})
+        return
+
+    # start: 사용자 텍스트(STT 결과 포함)와 응답할 면접관을 먼저 알려 UI가 즉시 자리 잡게.
+    yield _sse({"type": "start", "userText": user_text, "personaId": pc["persona_id"]})
+
+    full = ""
+    yielded = False
+    streamer = getattr(pc["llm"], "stream", None)
+    if callable(streamer):
+        try:
+            for delta in streamer(pc["q_ctx"]):
+                if not delta:
+                    continue
+                full += delta
+                yielded = True
+                yield _sse({"type": "token", "t": delta})
+        except Exception:
+            full = ""  # 스트림 도중 장애 → 아래 블로킹 폴백
+            if yielded:
+                yield _sse({"type": "reset"})  # 부분 토큰 무효화(클라: 현재 질문 비우기)
+
+    if not full.strip():
+        # 스트림 미지원(예: openai)·장애 → 블로킹 1회 호출 후 통째로 한 청크 전송.
+        # (exaone는 내부에서 mock 폴백하므로 EXAONE 미연결이어도 캔드 질문이 나온다.)
+        q_res = call_with_retry(pc["llm"], [pc["q_ctx"]], pc["tools"], pc["on_log"])
+        full = q_res.text or "조금 더 구체적으로 말씀해 주세요."
+        yield _sse({"type": "token", "t": full})
+
+    result = _turn_finalize(s, pc, full, is_voice)
+    yield _sse({"type": "done", "result": result})
 
 
 def _pass_probability(s: Session) -> float:

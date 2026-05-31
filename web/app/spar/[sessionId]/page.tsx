@@ -77,8 +77,11 @@ export default function SparPage() {
   const [roundOver, setRoundOver] = useState(false); // 판정 직후 입력 잠금 (중복 제출 방지)
   const [ended, setEnded] = useState(false); // 면접 전체 종료 (마지막 라운드 판정 완료)
   const [loadErr, setLoadErr] = useState(false);
+  // 음성 모드 첫 질문은 autoplay 정책상 사용자 제스처가 필요 → "면접 시작" 클릭에 묶는다.
+  const [needsStart, setNeedsStart] = useState(false);
   const round = session?.round ?? 1;
   const openedRef = useRef(false);
+  const openingTextRef = useRef<string>(""); // 시작 클릭 시 재생할 첫 질문 텍스트
   const voiceRef = useRef<string>(""); // setup에서 고른 면접관 목소리
 
   useEffect(() => {
@@ -98,7 +101,12 @@ export default function SparPage() {
           const opening = r === 1 ? s.openingQuestion?.trim() || p.openingLine : p.openingLine;
           if (s.activePersona !== p.id) setSession((prev) => (prev ? { ...prev, activePersona: p.id } : prev));
           setTurns([{ speaker: "ai", personaId: p.id, text: opening }]);
-          if (s.mode === "voice") playVoice(opening, null, voiceRef.current);
+          // 음성 모드: 첫 질문은 자동재생(autoplay) 차단 대상 → "면접 시작" 클릭(제스처)에 묶는다.
+          // 첫 오디오가 제스처로 재생되면 이후 면접관 음성도 브라우저에서 unlock된다.
+          if (s.mode === "voice") {
+            openingTextRef.current = opening;
+            setNeedsStart(true);
+          }
         }
       })
       .catch(() => setLoadErr(true));
@@ -330,6 +338,27 @@ export default function SparPage() {
 
   return (
     <div className="h-full flex flex-col">
+      {/* 음성 모드 시작 게이트 — 사용자 제스처(클릭)로 첫 질문 음성을 재생해 autoplay 차단 회피. */}
+      {needsStart && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-paper/85 backdrop-blur-sm px-6">
+          <div className="text-center max-w-sm">
+            <p className="font-display text-2xl text-ink mb-1">면접 준비 완료</p>
+            <p className="text-sm text-faint mb-6">
+              버튼을 누르면 면접관이 음성으로 첫 질문을 시작합니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setNeedsStart(false);
+                if (openingTextRef.current) playVoice(openingTextRef.current, null, voiceRef.current);
+              }}
+              className="rounded-full bg-ink px-8 py-3.5 text-sm font-medium text-paper hover:bg-accent transition-colors"
+            >
+              면접 시작
+            </button>
+          </div>
+        </div>
+      )}
       {/* 헤더: 페르소나 + 메타 + 상태 HUD */}
       <div className="shrink-0 border-b border-line/70 px-5 sm:px-8 py-3 flex items-center gap-4 flex-wrap bg-paper/60 backdrop-blur-sm">
         <PersonaTabs personas={session.personas} active={session.activePersona} />

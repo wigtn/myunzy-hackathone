@@ -10,6 +10,7 @@ import os
 import re
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -139,7 +140,11 @@ async def create_session(
             return fail("PAYLOAD_TOO_LARGE", "파일이 너무 큽니다(장당 최대 10MB).", 413)
         blobs.append((data, f.filename or "resume"))
     urls = [u.strip() for u in re.split(r"[\n,]+", jobPostingUrls) if u.strip()]
-    s = engine.bootstrap(
+    # ⚠️ 부트스트랩은 OCR/공고검색/LLM 등 동기 블로킹 I/O → 스레드풀로 오프로드해야
+    # 단일 이벤트 루프를 막지 않는다. (인라인 호출 시 한 명의 부트스트랩 동안 다른
+    # 동시접속자의 요청이 통째로 대기 → "세션 부팅 중…" 멈춤.)
+    s = await run_in_threadpool(
+        engine.bootstrap,
         blobs,
         company.strip(),
         role.strip(),
@@ -186,9 +191,10 @@ async def post_turn(session_id: str, request: Request):
         if not stt.get("text"):
             return fail("STT_FAILED", "음성을 인식하지 못했어요. 다시 말씀하거나 텍스트로 입력하세요.", 422)
         # 실 STT가 단어 타임스탬프를 주면 얼라이너 합성 대신 사용 (실데이터 분석)
+        # process_turn도 동기 블로킹(LLM/TTS) → 스레드풀 오프로드(이벤트 루프 보호).
         return ok(
-            engine.process_turn(
-                s, stt["text"], is_voice=True, word_timestamps=stt.get("wordTimestamps")
+            await run_in_threadpool(
+                engine.process_turn, s, stt["text"], is_voice=True, word_timestamps=stt.get("wordTimestamps")
             )
         )
 
@@ -196,7 +202,7 @@ async def post_turn(session_id: str, request: Request):
     text = (body.get("text") or "").strip()
     if not text:
         return fail("INVALID_INPUT", "답변 텍스트가 필요합니다.", 400)
-    return ok(engine.process_turn(s, text, is_voice=False))
+    return ok(await run_in_threadpool(engine.process_turn, s, text, is_voice=False))
 
 
 @app.post("/api/v1/sessions/{session_id}/turns/stream")

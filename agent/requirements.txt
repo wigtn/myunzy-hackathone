@@ -1,0 +1,14 @@
+# ── mock 런타임 (키 0개, GPU 불필요 — 지금 바로 실행) ──
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+python-multipart>=0.0.9
+httpx>=0.27              # 실 STT(STT_PROVIDER=qwen3) /v1/transcribe 호출용
+
+# ── DeepAgents 하네스 경로 (HARNESS=deepagents — 부트스트랩 wrap_tool_call/write_todos) ──
+# 미설치여도 기본 동작(결정론 부트스트랩)엔 영향 없음. 설치 시 실 DeepAgents 미들웨어 활성.
+deepagents>=0.6
+langchain>=1.0
+langgraph>=1.0
+langchain-openai>=1.0    # EXAONE(OpenAI 호환) 를 langchain model 로 바인딩
+# langchain-quickjs       # (선택) verdict code-as-action 승격용 — 현재 순수코드 폴백 사용

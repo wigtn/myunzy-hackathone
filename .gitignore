@@ -1,0 +1,42 @@
+# secrets — 절대 커밋 금지 (개인 발급 API 키)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# dependencies / build
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+
+# python (agent service)
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# logs / cache
+*.log
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+.turbo/
+.cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# 업로드/세션 휘발 데이터 (이력서 PII)
+uploads/
+tmp/
+*.local

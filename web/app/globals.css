@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* ── 면지 디자인 토큰 (Editorial Coach / Light · Premium) ──
+   라이트 페이퍼 + 명조 헤드라인 + 넓은 여백 + 절제된 색.
+   색은 아껴서 — 의미색은 작은 점/막대로만. */
+@theme {
+  --color-paper: #faf8f4; /* 따뜻한 크림 페이퍼 (페이지 배경) */
+  --color-card: #ffffff; /* 카드/패널 */
+  --color-sunken: #f3efe8; /* 입력·말풍선 함몰면 */
+  --color-ink: #1c1917; /* 헤드라인·본문·기본 버튼 (웜 블랙) */
+  --color-muted: #6f6a62; /* 보조 텍스트 */
+  --color-faint: #a8a29e; /* 흐린 텍스트·캡션 */
+  --color-line: #e7e2d9; /* 헤어라인 보더 */
+  --color-accent: #b15a2b; /* 테라코타 — 브랜드·링크·CTA 포인트 */
+  --color-accent-soft: #f2e7dd; /* 테라코타 틴트 배경 */
+  --color-pass: #3f7a5e; /* 세이지 — 합격·성공 */
+  --color-pressure: #c2410c; /* 번트오렌지 — 압박·경고·mock */
+  --color-err: #b4332a; /* 클레이 레드 — 에러 */
+  --color-live: #4a6fa5; /* 슬레이트 블루 — 에이전트 활동 */
+
+  --font-serif: var(--font-noto-serif), "AppleMyungjo", "Nanum Myeongjo", ui-serif, Georgia, serif;
+  --font-sans: "Pretendard", "Apple SD Gothic Neo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 고정 풀블리드 배경 — 스크롤해도 절대 안 짤림 (페이퍼 + 상단 따뜻한 글로우) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 520px at 50% -8%, #fffdf8 0%, rgba(255, 253, 248, 0) 62%),
+    radial-gradient(800px 600px at 100% 0%, #fbeede 0%, rgba(251, 238, 222, 0) 55%),
+    var(--color-paper);
+}
+
+/* 명조 헤드라인 유틸 */
+.font-display {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+/* 카드 소프트 섀도 (라이트) */
+.card-soft {
+  box-shadow:
+    0 1px 2px rgba(28, 25, 23, 0.04),
+    0 8px 24px -12px rgba(28, 25, 23, 0.12);
+}
+
+/* 라이브 상태 dot 점멸 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.82); }
+}
+.dot-live { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+/* 타이핑 dots */
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-3px); opacity: 0.9; }
+}
+.typing-dot { animation: typing 1.2s infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* 부드러운 등장 */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* 스크롤바 (라이트) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: #d8d2c7; }

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>면지 (面zy) · Wireframe — Command Center</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#0d1117; --elev:#161b22; --border:#30363d;
+    --hi:#e6edf3; --lo:#8b949e; --ok:#39d353; --run:#2f81f7; --warn:#d29922; --err:#f85149;
+    --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,monospace;
+    --sans:Pretendard,system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--hi);font-family:var(--sans);
+    background-image:linear-gradient(rgba(48,54,61,.15) 1px,transparent 1px),linear-gradient(90deg,rgba(48,54,61,.15) 1px,transparent 1px);
+    background-size:32px 32px;}
+  a{color:var(--run);text-decoration:none}
+  .mono{font-family:var(--mono)}
+  .lo{color:var(--lo)}
+  /* top nav */
+  .nav{position:sticky;top:0;z-index:10;display:flex;gap:4px;align-items:center;
+    padding:10px 16px;background:rgba(10,14,20,.9);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+  .brand{font-family:var(--mono);font-weight:700;margin-right:16px}
+  .brand small{color:var(--lo);font-weight:400}
+  .nav a{padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--mono);color:var(--lo)}
+  .nav a:hover{color:var(--hi);border-color:var(--run)}
+  /* page frame */
+  .page{max-width:1180px;margin:28px auto;padding:0 16px}
+  .ph{font-family:var(--mono);font-size:12px;color:var(--warn);letter-spacing:.08em;margin-bottom:6px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px}
+  .elev{background:var(--elev);border:1px solid var(--border);border-radius:8px}
+  .row{display:flex;gap:16px}
+  .col{flex:1}
+  .box{border:1px dashed var(--border);border-radius:8px;padding:14px;color:var(--lo);font-size:13px}
+  .btn{display:inline-block;background:var(--ok);color:#04210d;font-weight:700;padding:10px 18px;border-radius:8px;border:none;font-family:var(--mono);cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--hi);border:1px solid var(--border)}
+  .chip{display:inline-block;font-family:var(--mono);font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:20px;color:var(--lo);margin:2px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .d-ok{background:var(--ok)} .d-run{background:var(--run);box-shadow:0 0 8px var(--run)} .d-idle{background:var(--border)}
+  .badge-mock{color:var(--warn);border:1px solid var(--warn);font-size:10px;padding:1px 5px;border-radius:4px;font-family:var(--mono)}
+  /* agent log */
+  .log{font-family:var(--mono);font-size:12px;line-height:1.9}
+  .log .step{color:var(--hi)} .log .t{color:var(--lo)}
+  /* chat */
+  .bubble{max-width:75%;padding:11px 14px;border-radius:12px;margin:10px 0;font-size:14px;line-height:1.55}
+  .ai{background:var(--elev);border:1px solid var(--border);border-top-left-radius:2px}
+  .me{background:#13283f;border:1px solid #1f4d7a;margin-left:auto;border-top-right-radius:2px}
+  .gauge{height:10px;background:var(--elev);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+  .gauge > i{display:block;height:100%;width:42%;background:linear-gradient(90deg,var(--warn),var(--ok))}
+  .barbox{margin:8px 0}
+  .bar{height:8px;background:var(--elev);border:1px solid var(--border);border-radius:5px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--run)}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-family:var(--mono);font-size:13px}
+  .seg span{padding:8px 14px;color:var(--lo);cursor:pointer}
+  .seg span.on{background:var(--elev);color:var(--hi)}
+  .err{border:1px solid var(--err);color:var(--err);background:rgba(248,81,73,.08);padding:10px 12px;border-radius:8px;font-size:13px;margin:8px 0}
+  .warnbar{border:1px solid var(--warn);color:var(--warn);background:rgba(210,153,34,.08);padding:8px 12px;border-radius:8px;font-size:13px;margin:8px 0}
+  h1{font-size:30px;margin:8px 0} h2{font-size:18px;margin:0 0 12px}
+  .small{font-size:12px} .center{text-align:center}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .timeline .item{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:8px 0;background:var(--elev)}
+  .sectiongap{height:40px}
+  @media(max-width:560px){.row{flex-direction:column}.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <span class="brand">면지 <small>面zy</small></span>
+  <a href="#p1">/ 랜딩</a>
+  <a href="#p2">/setup</a>
+  <a href="#p3">/spar</a>
+  <a href="#p4">/result</a>
+  <span class="chip" style="margin-left:auto">Command Center · Lo-fi</span>
+</div>
+
+<!-- ============ P1 LANDING ============ -->
+<section class="page" id="p1">
+  <div class="ph">P1 · ROUTE: /  · guest/author · success</div>
+  <div class="panel center" style="padding:56px 18px">
+    <div class="chip">AGENTIC · 하네스 · self-evolving</div>
+    <h1>한 번뿐인 면접, 실전처럼 미리 겪어라.</h1>
+    <p class="lo" style="max-width:620px;margin:10px auto">내 이력서와 <b>실제 채용공고</b>로 만들어진 AI 면접관과 음성으로 모의면접 → 머뭇거림·근거까지 짚는 피드백.</p>
+    <div class="grid3" style="max-width:720px;margin:26px auto">
+      <div class="box"><b class="mono">01</b><br>이력서 업로드</div>
+      <div class="box"><b class="mono">02</b><br>AI 면접관 자동 생성</div>
+      <div class="box"><b class="mono">03</b><br>압박 면접 + 근거 피드백</div>
+    </div>
+    <a class="btn" href="#p2">면접 시작하기 →</a>
+    <div style="margin-top:22px">
+      <span class="chip">EXAONE</span><span class="chip">MISO OCR</span><span class="chip">Rocketpunch</span><span class="chip">API Fuse</span><span class="chip">Qwen3-ASR</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ P2 SETUP ============ -->
+<section class="page" id="p2">
+  <div class="ph">P2 · ROUTE: /setup · POST /sessions · loading|error|success</div>
+  <div class="row">
+    <div class="col panel">
+      <h2>면접관 만들기</h2>
+      <div class="box" style="text-align:center;padding:30px">⬆ 이력서·자소서 드롭 (PDF/PNG/JPG, ≤10MB)<br><span class="small">drag & drop 또는 클릭</span></div>
+      <div class="err">파일이 너무 큽니다(최대 10MB). 다른 파일을 올려주세요. <span class="small lo">(상태: error/413 예시)</span></div>
+      <div style="margin:12px 0"><label class="small lo">지원 회사</label><br><div class="elev" style="padding:10px;margin-top:4px">토스</div></div>
+      <div style="margin:12px 0"><label class="small lo">지원 직무</label><br><div class="elev" style="padding:10px;margin-top:4px">백엔드 엔지니어</div></div>
+      <div style="margin:12px 0">
+        <label class="small lo">모드</label><br>
+        <div class="seg" style="margin-top:4px"><span class="on">● 음성</span><span>텍스트</span></div>
+        <span class="seg" style="margin-left:10px"><span class="lo small" style="padding:8px">압박 강도</span><span class="on">1</span><span>2</span><span>3</span></span>
+      </div>
+      <div style="margin:14px 0" class="small"><input type="checkbox" checked> 녹음·이력서 처리에 동의합니다 <span class="lo">(FR-022)</span></div>
+      <button class="btn">면접관 생성 →</button>
+    </div>
+    <div class="col panel">
+      <h2>▸ AGENT LOG <span class="badge-mock">일부 mock</span></h2>
+      <div class="log">
+        <div><span class="dot d-ok"></span><span class="step">ocr.parse</span> <span class="t">이력서 분석 완료</span></div>
+        <div><span class="dot d-ok"></span><span class="step">job.search</span> <span class="t">채용공고 12건 조회 (Rocketpunch)</span></div>
+        <div><span class="dot d-ok"></span><span class="step">fitgap.analyze</span> <span class="t">공격 포인트 3개 추출</span></div>
+        <div><span class="dot d-run"></span><span class="step">persona.build</span> <span class="t">면접관 생성 중…</span></div>
+        <div class="lo">└ attackPoints: ["대규모 트래픽 경험 부족", "정량 성과 미제시", ...]</div>
+      </div>
+      <div class="warnbar" style="margin-top:14px">일부 데이터 소스가 불안정 → mock으로 진행 <span class="badge-mock">mock</span> <span class="small lo">(상태: degraded/503 예시)</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ P3 SPAR ============ -->
+<section class="page" id="p3">
+  <div class="ph">P3 · ROUTE: /spar/[id] · POST /turns · loading|error|success ⭐</div>
+  <div class="row">
+    <div class="col panel" style="flex:1.9">
+      <div class="seg" style="margin-bottom:6px"><span class="on">기술 면접관</span><span>임원</span></div>
+      <span class="small lo mono">mood: 날카로움 · pressure ████░ · hiddenAgenda ○</span>
+      <div style="margin-top:12px">
+        <div class="bubble ai">이력서에 "Redis 캐싱으로 응답 40% 개선"이라 적으셨는데, 어떤 키 전략을 쓰셨고 캐시 무효화는 어떻게 처리했나요? <span class="chip">📄 lookup_job_posting</span></div>
+        <div class="bubble me">아 그게… TTL을 걸어두고… 음… 보통은 그냥 만료되게 했습니다.</div>
+        <div class="bubble ai">"보통"이라면 직접 설계한 게 아니란 뜻인가요? 우리 공고는 <b>대규모 트래픽 처리</b>가 필수 요건입니다. <span class="chip" style="border-color:var(--warn);color:var(--warn)">📄 채용공고 필수요건 <span class="badge-mock">mock</span></span></div>
+      </div>
+      <div class="elev" style="padding:10px;margin-top:14px;display:flex;align-items:center;gap:10px">
+        <button class="btn" style="background:var(--err);color:#fff">● 녹음</button>
+        <span class="lo small">∿∿∿ 파형…  /  권한 거부 시 ↓</span>
+        <div class="box" style="flex:1;padding:8px">텍스트로 입력하기…</div>
+      </div>
+      <div class="err">잘 못 들었어요. 다시 말씀해 주시거나 텍스트로 입력하세요. <span class="small lo">(상태: error/STT 422 예시)</span></div>
+    </div>
+    <div class="col panel">
+      <h2>▸ AGENT LOG</h2>
+      <div class="log">
+        <div><span class="dot d-ok"></span><span class="step">harness.validate</span> <span class="t">tool-call OK</span></div>
+        <div><span class="dot d-ok"></span><span class="step">harness.retry ↻</span> <span class="t">깨진 JSON → 1회 재시도 복구</span></div>
+        <div><span class="dot d-run"></span><span class="step">tool.lookup_job_posting</span> <span class="t">필수요건 조회 ◍</span></div>
+        <div><span class="dot d-ok"></span><span class="step">check_answer_quality</span> <span class="t">STAR 구조 누락 감지</span></div>
+      </div>
+      <div class="elev" style="padding:12px;margin-top:14px">
+        <div class="small mono" style="color:var(--warn)">▲ evolve.diff (R1→R2)</div>
+        <div class="small">R1: 두루뭉술 <b>0.7</b> → R2 전략: <b>정량근거 강제</b></div>
+        <div class="small lo" style="margin-top:6px">R1 질문: "캐싱 써봤나요?" → R2 질문: "QPS 몇이고 수치로 증명?"</div>
+      </div>
+      <div style="margin-top:16px">
+        <div class="small lo">합격 확률 <span class="mono">42%</span></div>
+        <div class="gauge"><i></i></div>
+      </div>
+      <div style="margin-top:14px;text-align:right">
+        <button class="btn ghost">다음 라운드</button>
+        <a class="btn" href="#p4">라운드 종료 →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ P4 RESULT ============ -->
+<section class="page" id="p4">
+  <div class="ph">P4 · ROUTE: /result/[id] · POST /verdict · POST /replay · loading|error|success</div>
+  <div class="panel" style="margin-bottom:16px">
+    <span class="chip">총평</span> 근거는 있으나 정량화가 약하고, 압박 시 성급히 동의하는 패턴이 반복됨.
+  </div>
+  <div class="row">
+    <div class="col panel">
+      <h2>다차원 점수</h2>
+      <div class="barbox small">목표달성 <div class="bar"><i style="width:60%"></i></div></div>
+      <div class="barbox small">근거력 <div class="bar"><i style="width:70%"></i></div></div>
+      <div class="barbox small">감정조절 <div class="bar"><i style="width:50%"></i></div></div>
+      <div class="barbox small">타이밍 <div class="bar"><i style="width:40%"></i></div></div>
+      <div class="barbox small">단호함 <div class="bar"><i style="width:60%"></i></div></div>
+      <div class="box" style="margin-top:12px">⏱ <b>3.8초</b> 망설인 뒤 사과 · 최장침묵 5.1초 · filler 7회</div>
+    </div>
+    <div class="col panel">
+      <h2>프레임워크 · Fit Gap</h2>
+      <div class="small"><b class="mono">STAR / 역량면접</b></div>
+      <div class="small err" style="border:none;background:none;padding:4px 0">✗ STAR 구조 누락 · ✗ 정량 성과 미제시</div>
+      <hr style="border-color:var(--border)">
+      <div class="small" style="color:var(--ok)">✓ Redis 경험 언급 · ✓ 협업 사례</div>
+      <div class="small err" style="border:none;background:none;padding:4px 0">✗ 대규모 트래픽 경험 (여전히 약함)</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h2>순간 타임라인 — "이 답변 다시"</h2>
+    <div class="timeline">
+      <div class="item"><span class="small">R1 · 42s · <b>성급한 동의</b> — "아 네 맞습니다…"</span><button class="btn ghost small">이 답변 다시 →</button></div>
+      <div class="item"><span class="small">R2 · 18s · <b>정량 누락</b> — "꽤 개선됐습니다"</span><button class="btn ghost small">이 답변 다시 →</button></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="col box"><b>원본</b><br><span class="small lo">"아 네 맞습니다…" → 면접관 압박 강화, 합격확률 -8%</span></div>
+      <div class="col box" style="border-color:var(--ok)"><b style="color:var(--ok)">분기 (모범안)</b><br><span class="small">"수치로 말씀드리면 p95 120ms→70ms…" → 합격확률 <b style="color:var(--ok)">+18%</b></span></div>
+    </div>
+  </div>
+
+  <div class="center" style="margin-top:20px">
+    <a class="btn" href="#p3">다시하기</a>
+    <a class="btn ghost" href="#p1">처음으로</a>
+  </div>
+  <div class="sectiongap"></div>
+</section>
+
+<div class="page center lo small" style="padding-bottom:40px">
+  면지 Wireframe · Command Center (Dark Technical) · Lo-fi 레이아웃 검증용 · 실제 비주얼 아님
+</div>
+
+</body>
+</html>

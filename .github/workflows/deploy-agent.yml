@@ -1,0 +1,58 @@
+name: Deploy Agent (Cloud Run)
+
+# agent/ 변경이 main에 머지되면 Cloud Run에 자동 배포.
+# 인증: Workload Identity Federation(키리스) — GitHub에 GCP 키를 저장하지 않는다.
+# 배포는 '이미지만' 갱신 → env/Secret Manager 설정은 서비스에 그대로 보존됨.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - ".github/workflows/deploy-agent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # WIF OIDC 토큰 발급에 필요
+
+env:
+  PROJECT_ID: wigex-prod
+  REGION: asia-northeast3
+  SERVICE: myeonji-agent
+  IMAGE: asia-northeast3-docker.pkg.dev/wigex-prod/myeonji/myeonji-agent
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: GCP 인증 (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/764392388372/locations/global/workloadIdentityPools/github-pool/providers/github
+          service_account: myeonji-deployer@wigex-prod.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Artifact Registry 용 Docker 인증
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: 이미지 빌드 & 푸시
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" agent
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Cloud Run 배포 (이미지만 — env/시크릿 보존)
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE:${{ github.sha }}" \
+            --project "$PROJECT_ID" --region "$REGION" --quiet
+
+      - name: 헬스 체크
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          echo "Deployed: $URL"
+          curl -fsS -m 30 "$URL/health" && echo " OK"

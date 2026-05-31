@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>면지(Myunzy) — 아키텍처</title>
+<style>
+  :root{
+    --browser:#1565c0; --browser-bg:#e8f2fe; --browser-bd:#90caf9;
+    --bff:#7b1fa2; --bff-bg:#f7eafc; --bff-bd:#ce93d8;
+    --agent:#2e7d32; --agent-bg:#e9f7ec; --agent-bd:#a5d6a7;
+    --ext:#e65100; --ext-bg:#fff4e8; --ext-bd:#ffcc80;
+    --ink:#1b2430; --muted:#5b6b7b; --line:#9aa7b4;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:40px 32px 64px;
+    background:#f4f6f9;
+    font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+    color:var(--ink); -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto}
+  h1{font-size:26px; margin:0 0 4px; letter-spacing:-.02em}
+  .sub{color:var(--muted); font-size:14px; margin:0 0 28px}
+  .sub b{color:var(--ink)}
+
+  /* 레이어 밴드 */
+  .layer{
+    border-radius:16px; padding:16px 18px 18px; margin:0;
+    border:1.5px solid; position:relative;
+  }
+  .layer.browser{background:var(--browser-bg); border-color:var(--browser-bd)}
+  .layer.bff{background:var(--bff-bg); border-color:var(--bff-bd)}
+  .layer.agent{background:var(--agent-bg); border-color:var(--agent-bd)}
+  .layer.ext{background:var(--ext-bg); border-color:var(--ext-bd)}
+  .ltag{
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:12.5px; font-weight:700; letter-spacing:.01em;
+    padding:4px 11px; border-radius:999px; color:#fff; margin-bottom:14px;
+  }
+  .browser .ltag{background:var(--browser)} .bff .ltag{background:var(--bff)}
+  .agent .ltag{background:var(--agent)} .ext .ltag{background:var(--ext)}
+  .ltag .path{font-weight:500; opacity:.85; font-size:11.5px}
+
+  .row{display:flex; gap:12px; flex-wrap:wrap}
+  .row.center{justify-content:center}
+  .grow>*{flex:1}
+
+  /* 박스 */
+  .box{
+    background:#fff; border:1.5px solid var(--line); border-radius:12px;
+    padding:11px 13px; min-width:120px; box-shadow:0 1px 0 rgba(20,30,45,.04);
+  }
+  .box .t{font-weight:700; font-size:13.5px; display:flex; align-items:center; gap:6px}
+  .box .d{color:var(--muted); font-size:11.5px; margin-top:3px; line-height:1.45}
+  .browser .box{border-color:var(--browser-bd)} .browser .box .t{color:var(--browser)}
+  .bff .box{border-color:var(--bff-bd)} .bff .box .t{color:var(--bff)}
+  .agent .box{border-color:var(--agent-bd)} .agent .box .t{color:var(--agent)}
+  .ext .box{border-color:var(--ext-bd)} .ext .box .t{color:var(--ext)}
+
+  .chip{
+    background:#fff; border:1.3px solid var(--line); border-radius:9px;
+    padding:7px 10px; font-size:12px; font-weight:600;
+  }
+  .chip small{display:block; font-weight:400; color:var(--muted); font-size:10.5px; margin-top:2px}
+  .bff .chip{border-color:var(--bff-bd)} .ext .chip{border-color:var(--ext-bd)}
+  .agent .chip{border-color:var(--agent-bd)}
+
+  /* 화살표 / 커넥터 */
+  .flow{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; font-weight:600}
+  .arrowdown{
+    text-align:center; color:var(--line); font-size:13px; font-weight:700;
+    padding:8px 0 6px; letter-spacing:.04em;
+  }
+  .arrowdown b{color:var(--muted); font-weight:700}
+  .seg{height:1.5px; background:var(--line); flex:1; border-radius:2px}
+
+  /* 토글 분기 */
+  .branch{
+    display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px;
+  }
+  .diamond{
+    text-align:center; margin:10px auto 2px; max-width:380px;
+    background:#fff; border:1.5px solid var(--bff-bd); border-radius:12px;
+    padding:9px 12px; font-weight:700; color:var(--bff); font-size:13px;
+  }
+  .diamond small{display:block; font-weight:500; color:var(--muted); font-size:11px; margin-top:2px}
+  .branchcol{border:1.4px dashed var(--bff-bd); border-radius:12px; padding:11px 12px; background:rgba(255,255,255,.45)}
+  .branchcol .h{font-size:11.5px; font-weight:700; color:var(--bff); margin-bottom:9px; display:flex; gap:6px; align-items:center}
+  .branchcol.right{border-color:var(--agent-bd)} .branchcol.right .h{color:var(--agent)}
+  .pill{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; background:#fff; border:1.2px solid currentColor}
+
+  /* agent 내부 */
+  .stack{display:flex; flex-direction:column; gap:12px}
+  .agentgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px}
+  .toprow{display:flex; gap:12px; align-items:stretch}
+  .toprow .main{flex:0 0 auto}
+  .toprow .contract{margin-left:auto}
+
+  .legend{display:flex; gap:18px; flex-wrap:wrap; margin:22px 0 26px; font-size:12.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .dot{width:12px; height:12px; border-radius:4px; display:inline-block}
+
+  /* 턴 시퀀스 */
+  .seqwrap{margin-top:34px}
+  h2{font-size:18px; margin:0 0 14px; letter-spacing:-.01em}
+  .pipe{display:flex; gap:0; align-items:stretch; flex-wrap:wrap}
+  .step{
+    flex:1; min-width:150px; background:#fff; border:1.5px solid #d7dee6; border-radius:12px;
+    padding:11px 13px; position:relative; margin-right:22px; margin-bottom:14px;
+  }
+  .step:after{content:"▶"; position:absolute; right:-19px; top:50%; transform:translateY(-50%); color:var(--line); font-size:13px}
+  .step:last-child{margin-right:0}
+  .step:last-child:after{display:none}
+  .step .n{font-size:11px; font-weight:800; color:#fff; background:var(--agent); width:20px; height:20px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:6px}
+  .step .t{font-weight:700; font-size:12.5px}
+  .step .d{color:var(--muted); font-size:11px; margin-top:3px; line-height:1.45}
+  .step.evolve{border-color:var(--ext-bd); background:#fffaf3}
+  .step.evolve .n{background:var(--ext)}
+
+  /* 설계 결정 표 */
+  table{width:100%; border-collapse:collapse; margin-top:30px; font-size:13px}
+  caption{text-align:left; font-size:18px; font-weight:700; margin-bottom:12px; letter-spacing:-.01em}
+  th,td{border:1px solid #e1e7ee; padding:10px 12px; text-align:left; vertical-align:top}
+  th{background:#eef2f6; font-weight:700; font-size:12.5px}
+  td b{color:var(--agent)}
+  .foot{margin-top:24px; color:var(--muted); font-size:12px}
+  code{background:#eef2f6; padding:1px 6px; border-radius:5px; font-size:12px; font-family:"SF Mono",ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>면지 (Myunzy) — 아키텍처</h1>
+  <p class="sub">mock-first <b>듀얼 백엔드</b> + <b>포트/어댑터</b> 구조. 웹 단독으로 데모 완주, Python 에이전트를 붙이면 실서비스로 토글.</p>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--browser)"></i>Browser (Next.js/React)</span>
+    <span><i class="dot" style="background:var(--bff)"></i>BFF (Next API + 내장 mock)</span>
+    <span><i class="dot" style="background:var(--agent)"></i>Python Agent (FastAPI)</span>
+    <span><i class="dot" style="background:var(--ext)"></i>외부 스폰서 API/서비스</span>
+  </div>
+
+  <!-- ── Layer 1: Browser ── -->
+  <div class="layer browser">
+    <span class="ltag">🖥️ Browser <span class="path">web/app/*</span></span>
+    <div class="row grow">
+      <div class="box"><div class="t">setup</div><div class="d">이력서·공고 업로드, 면접 설정</div></div>
+      <div class="box"><div class="t">spar/:id</div><div class="d">실시간 면접 턴 · 음성 녹음/재생</div></div>
+      <div class="box"><div class="t">result/:id</div><div class="d">verdict · 자가진화 diff 시각화</div></div>
+      <div class="box"><div class="t">audio.ts</div><div class="d">녹음(webm) · TTS SpeechSynthesis 폴백</div></div>
+    </div>
+  </div>
+
+  <div class="arrowdown">│  <b>fetch /api/v1/*</b>  │<br>▼</div>
+
+  <!-- ── Layer 2: BFF ── -->
+  <div class="layer bff">
+    <span class="ltag">⚙️ Next.js BFF <span class="path">web/app/api/v1 · web/lib/bff</span></span>
+    <div class="row center">
+      <div class="box" style="min-width:60%"><div class="t">routes</div><div class="d">sessions · turns · verdict · replay · logs · tts</div></div>
+    </div>
+
+    <div class="diamond">agentClient.ts — <code>isProxy?</code><small>환경변수 AGENT_SERVICE_URL 유무로 분기</small></div>
+
+    <div class="branch">
+      <div class="branchcol">
+        <div class="h"><span class="pill">unset</span> 내장 TS mock 엔진 (단독 데모 · 키 0개)</div>
+        <div class="row grow" style="gap:9px">
+          <div class="chip">mockEngine.ts<small>결정론 엔진</small></div>
+          <div class="chip">mockData.ts<small>페르소나·질문뱅크</small></div>
+        </div>
+        <div class="row grow" style="gap:9px; margin-top:9px">
+          <div class="chip">store.ts<small>인메모리 세션</small></div>
+          <div class="chip">sttClient.ts<small>실 Qwen3 STT 호출</small></div>
+          <div class="chip">ttsClient.ts</div>
+        </div>
+      </div>
+      <div class="branchcol right">
+        <div class="h"><span class="pill">set</span> HTTP <code>forward()</code> → Python Agent 프록시</div>
+        <div class="d" style="color:var(--muted); font-size:12px; line-height:1.6">
+          두 경로 모두 동일한 <b>§5.1 REST 계약</b>을 지킴<br>
+          <code>web/lib/contract/types.ts</code> ≡ <code>agent/app/contract.py</code>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrowdown">│  <b>§5.1 REST (프록시 모드)</b>  │<br>▼</div>
+
+  <!-- ── Layer 3: Python Agent ── -->
+  <div class="layer agent">
+    <span class="ltag">🐍 Python Agent — FastAPI <span class="path">agent/app/* · DeepAgents analog</span></span>
+    <div class="stack">
+      <div class="toprow">
+        <div class="box main"><div class="t">main.py</div><div class="d">§5.1 REST 노출 (BFF가 1:1 프록시)</div></div>
+        <div class="box contract"><div class="t">contract.py</div><div class="d">pydantic §5.1 계약</div></div>
+      </div>
+
+      <div class="box" style="border-width:2px"><div class="t">engine.py — 결정론 턴 컨트롤러 <span style="font-weight:500;color:var(--muted);font-size:11.5px">(LangGraph analog)</span></div><div class="d">bootstrap → process_turn → process_verdict → process_replay · 점수=순수함수(랜덤 금지)</div></div>
+
+      <div class="agentgrid">
+        <div class="box"><div class="t">harness.py</div><div class="d">tool-call 하네스: Hermes툴 큐레이션·스키마 검증·자동 재시도 로그</div></div>
+        <div class="box"><div class="t">state.py</div><div class="d">약점신호 분석 + 세션휘발 weakness_profile <b>(자가진화)</b></div></div>
+        <div class="box"><div class="t">skills.py</div><div class="d">페르소나 · STAR 프레임워크 · 플레이북(직무감지) · 길이 프리셋</div></div>
+        <div class="box"><div class="t">store.py</div><div class="d">인메모리 세션 (PII 휘발)</div></div>
+        <div class="box"><div class="t">llm/ — provider-agnostic</div><div class="d"><code>get_llm()</code>: mock ↔ exaone</div></div>
+        <div class="box"><div class="t">ports.py — Protocol 포트</div><div class="d">OCR·Job·Rank·Gw·STT·Align·TTS · 각 포트 Mock ↔ 실어댑터 토글</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrowdown">│  <b>실 어댑터 도착 시 교체</b>  │<br>▼</div>
+
+  <!-- ── Layer 4: External ── -->
+  <div class="layer ext">
+    <span class="ltag">☁️ 외부 — 스폰서 API / 서비스</span>
+    <div class="row grow">
+      <div class="chip">EXAONE<small>vLLM·Ollama·Bedrock · LG U+ 트랙 (stub)</small></div>
+      <div class="chip">Qwen3 ASR<small>STT (서버사이드 호출)</small></div>
+      <div class="chip">Rocketpunch<small>채용공고</small></div>
+      <div class="chip">GenRank<small>회사 평판</small></div>
+      <div class="chip">API Fuse<small>게이트웨이 (16 API)</small></div>
+      <div class="chip">TTS<small>음성 합성</small></div>
+    </div>
+  </div>
+
+  <!-- ── 턴 시퀀스 ── -->
+  <div class="seqwrap">
+    <h2>한 턴의 흐름 — 음성 면접</h2>
+    <div class="pipe">
+      <div class="step"><span class="n">1</span><div class="t">음성 입력</div><div class="d">사용자 녹음(webm) → BFF <code>/turns</code></div></div>
+      <div class="step"><span class="n">2</span><div class="t">STT 전사</div><div class="d">sttClient → Qwen3 ASR<br>{text, wordTimestamps}</div></div>
+      <div class="step"><span class="n">3</span><div class="t">약점 분석</div><div class="d">analyze_answer → round_weak_signals 누적 · 약점+예산 남으면 <b>꼬리질문 발사</b></div></div>
+      <div class="step"><span class="n">4</span><div class="t">하네스 + LLM</div><div class="d">tool-call 검증·재시도 → 면접관 다음 질문 (mock/EXAONE)</div></div>
+      <div class="step"><span class="n">5</span><div class="t">응답</div><div class="d">TTS 음성 + stateDelta(압박↑) + passProbability</div></div>
+      <div class="step evolve"><span class="n">6</span><div class="t">verdict (라운드 종료)</div><div class="d">weakness_profile before→after diff <b>= 자가진화</b> · interview_length 소진 시 종료</div></div>
+    </div>
+  </div>
+
+  <!-- ── DeepAgents 매핑 ── -->
+  <div class="seqwrap">
+    <h2>DeepAgents 매핑 — 왜 "직접 만든 AI"가 아니라 "OSS 활용"인가</h2>
+    <p class="sub" style="margin:-4px 0 14px">
+      에이전트 구조 전체가 <b>DeepAgents</b>(LangChain) 패턴의 analog. mock 모드는 의존성 0으로 동작하고,
+      <code>LLM_PROVIDER=exaone</code> 승격 시 실제 <code>deepagents · langgraph · langchain-quickjs</code> 경로가 열린다.
+    </p>
+    <table style="margin-top:0">
+      <thead><tr>
+        <th style="width:26%">면지 모듈 (현재)</th>
+        <th style="width:30%">DeepAgents 컴포넌트</th>
+        <th>역할</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><code>harness.py</code></td><td><b>wrap_tool_call</b> middleware</td><td>tool-call 스키마 검증 + 자동 리프롬프트(재시도) → 작은 모델도 tool-call 유효율 ↑</td></tr>
+        <tr><td><code>skills.py</code></td><td><b>SkillsMiddleware</b> (SKILL.md)</td><td>페르소나/STAR/플레이북 = 스킬 한 장. 새 도메인은 데이터만 추가(엔진 불변)</td></tr>
+        <tr><td><code>state.py</code></td><td><b>StateBackend</b></td><td>약점 신호 분석 + 세션휘발 weakness_profile(자가진화)</td></tr>
+        <tr><td><code>engine.py</code></td><td><b>LangGraph</b> 결정론 컨트롤러</td><td>턴 루프 = 결정론 tool-calling · verdict = 순수코드 집계(LLM 없이)</td></tr>
+        <tr><td><code>llm/base.py</code></td><td><b>provider-agnostic</b> model port</td><td>포트 뒤에 EXAONE(vLLM·Ollama·Bedrock) 교체 — mock ↔ exaone</td></tr>
+        <tr><td><code>(EXAONE 승격)</code></td><td><b>CodeInterpreterMiddleware</b><br>langchain-quickjs</td><td>QuickJS code-as-action 하네스 (Anthropic PTC 아님 — EXAONE 호환)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── 설계 결정 ── -->
+  <table>
+    <caption>핵심 설계 결정</caption>
+    <thead><tr><th style="width:20%">결정</th><th style="width:42%">무엇</th><th>왜 (심사 / 데모)</th></tr></thead>
+    <tbody>
+      <tr><td><b>듀얼 백엔드 토글</b></td><td><code>isProxy</code> — Python 프록시 ↔ 브라우저 내장 mock</td><td>웹 단독 데모 완주 보장 + 키 0개 구동</td></tr>
+      <tr><td><b>포트/어댑터(Protocol)</b></td><td><code>ports.py</code> 7개 포트, Mock ↔ 실어댑터(<code>Qwen3Stt</code>)</td><td>스폰서 API를 한 곳에서 갈아끼움, mock으로 먼저 완성</td></tr>
+      <tr><td><b>LLM provider-agnostic</b></td><td><code>get_llm()</code> mock ↔ EXAONE (<code>LLM_PROVIDER</code>)</td><td>EXAONE = LG U+ Voice AI 트랙 자격요건, <code>exaone.py</code> 한 파일로 격리</td></tr>
+      <tr><td><b>결정론 엔진 + 하네스</b></td><td>점수=순수함수(랜덤 금지), <code>harness.py</code> tool-call 검증·재시도</td><td>주최 강조 "agentic / 하네스" 신호, 심사위원이 일관성 확인</td></tr>
+    </tbody>
+  </table>
+
+  <p class="foot">생성: <code>/auto-commit</code> 파이프라인 · 면지 음성 모의면접 에이전트 · WIGTN</p>
+</div>
+</body>
+</html>
